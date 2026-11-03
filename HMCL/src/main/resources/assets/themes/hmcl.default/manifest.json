@@ -31,5 +31,17 @@
       }
     }
   ],
-  "theme": {}
+  "theme": {
+    "brightness": "dark",
+    "color": "#A2C8FE",
+    "colorStyle": "rainbow",
+    "background": {
+      "type": "theme_color",
+      "opacity": 1.0
+    },
+    "titleBar": {
+      "transparent": true
+    },
+    "windowTransparent": false
+  }
 }

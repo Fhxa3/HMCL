@@ -38,7 +38,6 @@ import org.jackhuang.hmcl.ui.animation.ContainerAnimations;
 import org.jackhuang.hmcl.ui.animation.TransitionPane;
 import org.jackhuang.hmcl.ui.construct.*;
 import org.jackhuang.hmcl.ui.instances.Instances;
-import org.jackhuang.hmcl.util.RegionUtils;
 import org.jackhuang.hmcl.util.i18n.I18n;
 import org.jackhuang.hmcl.util.io.FileUtils;
 import org.jackhuang.hmcl.util.io.Zipper;
@@ -525,11 +524,6 @@ public class TerracottaControllerPage extends StackPane {
 
         VBox content = new VBox(10);
         content.getChildren().add(ComponentList.createComponentListTitle(i18n("terracotta.status")));
-        if (!"CN".equals(RegionUtils.MACHINE_REGION)) {
-            HintPane hintPane = new HintPane(MessageDialogPane.MessageType.WARNING);
-            hintPane.setText(i18n("terracotta.unsupported.region"));
-            content.getChildren().add(hintPane);
-        }
         content.getChildren().add(transition);
         content.setPadding(new Insets(10));
         content.setFillWidth(true);

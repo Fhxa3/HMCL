@@ -129,6 +129,9 @@ public final class Decorator {
     /// Whether the attached stage delegates window decoration and gestures to the platform.
     private boolean nativeDecorationEnabled;
 
+    /// Whether the attached stage is opaque and therefore presented without window transparency.
+    private boolean opaqueStage;
+
     /// Installs application-specific identity and lifecycle integration on replacement stages before attachment.
     private final Consumer<Stage> stageInitializer;
 
@@ -304,7 +307,7 @@ public final class Decorator {
     ///
     /// @param edgeToEdge whether the attached stage is maximized under [WindowState]'s policy or full-screen
     private void updateWindowDecoration(boolean edgeToEdge) {
-        boolean customDecoration = !nativeDecorationEnabled && !edgeToEdge;
+        boolean customDecoration = !nativeDecorationEnabled && !opaqueStage && !edgeToEdge;
         root.setPadding(customDecoration ? SHADOW_INSETS : Insets.EMPTY);
         shadowContainer.setEffect(customDecoration ? windowShadow : null);
         mainWindowPane.setWindowCornersRounded(customDecoration);
@@ -738,11 +741,13 @@ public final class Decorator {
 
     /// Returns the preferred style for the configured native-decoration policy and current theme.
     ///
-    /// @return the system style when available and permitted by the policy; otherwise the custom transparent style
+    /// Opaque windows use an undecorated stage so that the window is presented through the hardware pipeline.
     private StageStyle preferredStageStyle() {
-        return nativeDecoration != null && nativeDecoration.isPreferred(
-                Themes.windowTransparentProperty().get(), Themes.darkModeProperty().get())
-                ? nativeDecoration.style : StageStyle.TRANSPARENT;
+        if (nativeDecoration != null && nativeDecoration.isPreferred(
+                Themes.windowTransparentProperty().get(), Themes.darkModeProperty().get())) {
+            return nativeDecoration.style;
+        }
+        return Themes.windowTransparentProperty().get() ? StageStyle.TRANSPARENT : StageStyle.UNDECORATED;
     }
 
     /// Replaces the attached stage when transparency or theme brightness requires a different decoration style.
@@ -819,6 +824,7 @@ public final class Decorator {
             newStage.initStyle(style);
         }
         nativeDecorationEnabled = nativeDecoration != null && style == nativeDecoration.style;
+        opaqueStage = style != StageStyle.TRANSPARENT;
         if (nativeDecoration != null) {
             nativeDecoration.setContent(null);
             if (nativeDecorationEnabled) {
@@ -852,7 +858,7 @@ public final class Decorator {
             }
         }
 
-        if (nativeDecorationEnabled) {
+        if (opaqueStage) {
             scene.fillProperty().bind(Themes.colorSchemeProperty().getSurfaceContainer());
         } else {
             scene.fillProperty().unbind();

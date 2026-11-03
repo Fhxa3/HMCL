@@ -47,9 +47,6 @@ import org.jackhuang.hmcl.ui.construct.TwoLineListItem;
 import org.jackhuang.hmcl.ui.decorator.DecoratorPage;
 import org.jackhuang.hmcl.ui.instances.GameListPopupMenu;
 import org.jackhuang.hmcl.ui.instances.Instances;
-import org.jackhuang.hmcl.upgrade.RemoteVersion;
-import org.jackhuang.hmcl.upgrade.UpdateChecker;
-import org.jackhuang.hmcl.upgrade.UpdateHandler;
 import org.jackhuang.hmcl.util.*;
 import org.jackhuang.hmcl.util.i18n.I18n;
 import org.jackhuang.hmcl.util.javafx.BindingMapping;
@@ -71,14 +68,10 @@ import static org.jackhuang.hmcl.util.logging.Logger.LOG;
 
 /// Displays the launcher home controls for the currently selected game repository.
 public final class MainPage extends StackPane implements DecoratorPage {
-    private static final String ANNOUNCEMENT = "announcement";
 
     private final ReadOnlyObjectWrapper<State> state = new ReadOnlyObjectWrapper<>();
 
     private final ObjectProperty<@Nullable HMCLGameInstance> currentGame = new SimpleObjectProperty<>(this, "currentGame");
-    private final BooleanProperty showUpdate = new SimpleBooleanProperty(this, "showUpdate");
-    private final BooleanProperty showUpdateDialog = new SimpleBooleanProperty(this, "showUpdateDialog");
-    private final ObjectProperty<RemoteVersion> latestVersion = new SimpleObjectProperty<>(this, "latestVersion");
     /// Mutable storage for visible instances from the selected repository's current snapshot.
     private final ObservableList<HMCLGameInstance> mutableInstances = FXCollections.observableArrayList();
 
@@ -91,11 +84,7 @@ public final class MainPage extends StackPane implements DecoratorPage {
             BindingMapping.of(GameDirectoryManager.selectedRepositoryProperty())
                     .flatMap(HMCLGameRepository::snapshotProperty);
 
-    private TransitionPane announcementPane;
-    private final StackPane updatePane;
     private final JFXButton menuButton;
-
-    private RemoteVersion lastShownVersion;
 
     {
         HBox titleNode = new HBox(8);
@@ -116,89 +105,6 @@ public final class MainPage extends StackPane implements DecoratorPage {
         state.setValue(new State(null, titleNode, false, false, true));
 
         setPadding(new Insets(20));
-
-        if (Metadata.isNightly() || (Metadata.isDev() && !Objects.equals(Metadata.VERSION, state().getShownTips().get(ANNOUNCEMENT)))) {
-            String title;
-            String content;
-            if (Metadata.isNightly()) {
-                title = i18n("update.channel.nightly.title");
-                content = i18n("update.channel.nightly.hint");
-            } else {
-                title = i18n("update.channel.dev.title");
-                content = i18n("update.channel.dev.hint");
-            }
-
-            VBox announcementCard = new VBox();
-
-            BorderPane titleBar = new BorderPane();
-            titleBar.getStyleClass().add("title");
-            titleBar.setLeft(new Label(title));
-
-            JFXButton btnHide = new JFXButton();
-            btnHide.setOnAction(e -> {
-                announcementPane.setContent(new StackPane(), ContainerAnimations.FADE);
-                if (Metadata.isDev()) {
-                    state().getShownTips().put(ANNOUNCEMENT, Metadata.VERSION);
-                }
-            });
-            btnHide.getStyleClass().add("announcement-close-button");
-            btnHide.setGraphic(SVG.CLOSE.createIcon(20));
-            titleBar.setRight(btnHide);
-
-            TextFlow body = FXUtils.segmentToTextFlow(content, Controllers::onHyperlinkAction);
-            body.setLineSpacing(4);
-
-            announcementCard.getChildren().setAll(titleBar, body);
-            announcementCard.setSpacing(16);
-            announcementCard.getStyleClass().addAll("card", "announcement");
-
-            VBox announcementBox = new VBox(16);
-            announcementBox.setPadding(new Insets(15));
-            announcementBox.getChildren().add(announcementCard);
-
-            announcementPane = new TransitionPane();
-            announcementPane.setContent(announcementBox, ContainerAnimations.NONE);
-
-            StackPane.setMargin(announcementPane, new Insets(-15));
-            getChildren().add(announcementPane);
-        }
-
-        updatePane = new StackPane();
-        updatePane.setVisible(false);
-        updatePane.getStyleClass().add("bubble");
-        FXUtils.setLimitWidth(updatePane, 230);
-        FXUtils.setLimitHeight(updatePane, 55);
-        StackPane.setAlignment(updatePane, Pos.TOP_RIGHT);
-        FXUtils.onClicked(updatePane, this::onUpgrade);
-        updatePane.setCursor(Cursor.HAND);
-        FXUtils.onChange(showUpdateProperty(), this::doAnimation);
-        FXUtils.onChange(showUpdateDialogProperty(), this::showUpdateDialog);
-
-        {
-            HBox hBox = new HBox();
-            hBox.setSpacing(12);
-            hBox.setAlignment(Pos.CENTER_LEFT);
-            StackPane.setAlignment(hBox, Pos.CENTER_LEFT);
-            StackPane.setMargin(hBox, new Insets(9, 12, 9, 16));
-            {
-                TwoLineListItem prompt = new TwoLineListItem();
-                prompt.setSubtitle(i18n("update.bubble.subtitle"));
-                prompt.setPickOnBounds(false);
-                prompt.titleProperty().bind(BindingMapping.of(latestVersionProperty()).map(latestVersion ->
-                        latestVersion == null ? "" : i18n("update.bubble.title", latestVersion.version())));
-
-                hBox.getChildren().setAll(SVG.UPDATE.createIcon(20), prompt);
-            }
-
-            JFXButton closeUpdateButton = new JFXButton();
-            closeUpdateButton.setGraphic(SVG.CLOSE.createIcon(10));
-            StackPane.setAlignment(closeUpdateButton, Pos.TOP_RIGHT);
-            closeUpdateButton.getStyleClass().add("toggle-icon-tiny");
-            StackPane.setMargin(closeUpdateButton, new Insets(5));
-            closeUpdateButton.setOnAction(e -> closeUpdateBubble());
-
-            updatePane.getChildren().setAll(hBox, closeUpdateButton);
-        }
 
         HBox launchPane = new HBox();
         launchPane.getStyleClass().add("launch-pane");
@@ -299,44 +205,9 @@ public final class MainPage extends StackPane implements DecoratorPage {
             launchPane.getChildren().setAll(launchButton, menuButton);
         }
 
-        getChildren().addAll(updatePane, launchPane);
+        getChildren().add(launchPane);
 
     }
-
-    private void showUpdateDialog(boolean show) {
-        if (show && getLatestVersion() != null && !Objects.equals(getLatestVersion(), lastShownVersion)
-                && !Objects.equals(state().getPromptedVersion(), getLatestVersion().version())
-        ) {
-            lastShownVersion = getLatestVersion();
-            Controllers.dialogLater(new MessageDialogPane.Builder("", i18n("update.bubble.title", getLatestVersion().version()), MessageDialogPane.MessageType.INFO)
-                    .addAction(i18n("button.view"), () -> {
-                        state().setPromptedVersion(getLatestVersion().version());
-                        onUpgrade();
-                    })
-                    .addCancel(null)
-                    .build());
-        }
-    }
-
-    private void doAnimation(boolean show) {
-        if (AnimationUtils.isAnimationEnabled()) {
-            Duration duration = Duration.millis(320);
-            Timeline nowAnimation = new Timeline();
-            nowAnimation.getKeyFrames().addAll(
-                    new KeyFrame(Duration.ZERO,
-                            new KeyValue(updatePane.translateXProperty(), show ? 260 : 0, SINE)),
-                    new KeyFrame(duration,
-                            new KeyValue(updatePane.translateXProperty(), show ? 0 : 260, SINE)));
-            if (show) nowAnimation.getKeyFrames().add(
-                    new KeyFrame(Duration.ZERO, e -> updatePane.setVisible(true)));
-            else nowAnimation.getKeyFrames().add(
-                    new KeyFrame(duration, e -> updatePane.setVisible(false)));
-            nowAnimation.play();
-        } else {
-            updatePane.setVisible(show);
-        }
-    }
-
     private void launch() {
         HMCLGameRepository repository = GameDirectoryManager.getSelectedRepository();
         Instances.launch(repository.getSelectedInstance());
@@ -383,19 +254,6 @@ public final class MainPage extends StackPane implements DecoratorPage {
         Controllers.taskDialog(task, i18n("instance.launch.empty.installing"), TaskCancellationAction.NORMAL);
     }
 
-    private void onUpgrade() {
-        RemoteVersion target = UpdateChecker.getLatestVersion();
-        if (target == null) {
-            return;
-        }
-        UpdateHandler.updateFrom(target);
-    }
-
-    private void closeUpdateBubble() {
-        showUpdate.unbind();
-        showUpdate.set(false);
-    }
-
     @Override
     public ReadOnlyObjectWrapper<State> stateProperty() {
         return state;
@@ -431,41 +289,4 @@ public final class MainPage extends StackPane implements DecoratorPage {
     public @UnmodifiableView ObservableList<HMCLGameInstance> getInstances() {
         return instances;
     }
-
-    public boolean isShowUpdate() {
-        return showUpdate.get();
-    }
-
-    public BooleanProperty showUpdateProperty() {
-        return showUpdate;
-    }
-
-    public void setShowUpdate(boolean showUpdate) {
-        this.showUpdate.set(showUpdate);
-    }
-
-    public boolean isShowUpdateDialog() {
-        return showUpdateDialog.get();
-    }
-
-    public BooleanProperty showUpdateDialogProperty() {
-        return showUpdateDialog;
-    }
-
-    public void setShowUpdateDialog(boolean showUpdateDialog) {
-        this.showUpdateDialog.set(showUpdateDialog);
-    }
-
-    public RemoteVersion getLatestVersion() {
-        return latestVersion.get();
-    }
-
-    public ObjectProperty<RemoteVersion> latestVersionProperty() {
-        return latestVersion;
-    }
-
-    public void setLatestVersion(RemoteVersion latestVersion) {
-        this.latestVersion.set(latestVersion);
-    }
-
 }
