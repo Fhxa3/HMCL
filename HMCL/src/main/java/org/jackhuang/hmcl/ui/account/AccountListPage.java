@@ -21,7 +21,6 @@ import org.jackhuang.hmcl.ui.*;
 import org.jackhuang.hmcl.ui.construct.AdvancedListItem;
 import org.jackhuang.hmcl.ui.decorator.DecoratorAnimatedPage;
 import org.jackhuang.hmcl.ui.decorator.DecoratorPage;
-import org.jackhuang.hmcl.util.RegionUtils;
 import org.jackhuang.hmcl.util.javafx.BindingMapping;
 import org.jackhuang.hmcl.util.javafx.MappedObservableList;
 import org.jetbrains.annotations.Nullable;
@@ -41,8 +40,9 @@ public final class AccountListPage extends DecoratorAnimatedPage implements Deco
     static {
         String property = System.getProperty("hmcl.offline.auth.restricted", "auto");
 
+        // Offline accounts stay available everywhere.
         if ("false".equals(property)
-                || "auto".equals(property) && "CN".equals(RegionUtils.MACHINE_REGION)
+                || "auto".equals(property)
                 || SettingsManager.userSettings().enableOfflineAccountProperty().get())
             RESTRICTED.set(false);
         else

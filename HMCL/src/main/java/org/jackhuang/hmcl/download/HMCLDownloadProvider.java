@@ -14,7 +14,6 @@ import org.jackhuang.hmcl.game.GameComponentType;
 import org.jackhuang.hmcl.game.HMCLCacheRepository;
 import org.jackhuang.hmcl.setting.DownloadSource;
 import org.jackhuang.hmcl.task.Task;
-import org.jackhuang.hmcl.util.RegionUtils;
 import org.jackhuang.hmcl.util.versioning.GameVersionNumber;
 import org.jetbrains.annotations.NotNullByDefault;
 import org.jetbrains.annotations.Nullable;
@@ -31,17 +30,10 @@ public final class HMCLDownloadProvider extends DownloadProvider {
             DownloadSource source,
             WebURL defaultUrl, WebURL bmclapiUrl
     ) {
-        if ("CN".equals(RegionUtils.MACHINE_REGION)) {
-            return switch (source) {
-                case DEFAULT, OFFICIAL -> DownloadCandidates.of(defaultUrl, bmclapiUrl);
-                case MIRROR -> DownloadCandidates.of(bmclapiUrl, defaultUrl);
-            };
-        } else {
-            return switch (source) {
-                case DEFAULT, OFFICIAL -> DownloadCandidates.of(defaultUrl);
-                case MIRROR -> DownloadCandidates.of(bmclapiUrl, defaultUrl);
-            };
-        }
+        return switch (source) {
+            case DEFAULT, OFFICIAL -> DownloadCandidates.of(defaultUrl, bmclapiUrl);
+            case MIRROR -> DownloadCandidates.of(bmclapiUrl, defaultUrl);
+        };
     }
 
     private static DownloadCandidates getCandidates(DownloadSource source, List<MirrorRule> rules, List<String> urls) {
@@ -49,23 +41,10 @@ public final class HMCLDownloadProvider extends DownloadProvider {
             throw new IllegalArgumentException("urls cannot be empty");
         }
 
-        // true means prefer mirror, false means prefer official, null means do not use mirror
-        @Nullable Boolean mirrorFirst;
-        if ("CN".equals(RegionUtils.MACHINE_REGION)) {
-            mirrorFirst = switch (source) {
-                case DEFAULT, MIRROR -> true;
-                case OFFICIAL -> false;
-            };
-        } else {
-            mirrorFirst = switch (source) {
-                case DEFAULT, OFFICIAL -> null;
-                case MIRROR -> true;
-            };
-        }
-
-        if (mirrorFirst == null) {
-            return DownloadCandidates.of(urls.stream().map(DownloadCandidate::of).toArray(DownloadCandidate[]::new));
-        }
+        boolean mirrorFirst = switch (source) {
+            case DEFAULT, MIRROR -> true;
+            case OFFICIAL -> false;
+        };
 
         var candidates = new ArrayList<DownloadCandidate>(urls.size() * 2);
         for (String url : urls) {
@@ -229,9 +208,8 @@ public final class HMCLDownloadProvider extends DownloadProvider {
 
     @Override
     public DownloadCandidates getCleanroomVersionListCandidates() {
-        return "CN".equals(RegionUtils.MACHINE_REGION)
-                ? DownloadCandidates.of(CleanroomRemoteVersion.LOADER_LIST_URL, WebURL.parse("https://alist.8mi.tech/d/mirror/HMCL-Metadata/Auto/cleanroom/index.json"))
-                : DownloadCandidates.of(CleanroomRemoteVersion.LOADER_LIST_URL);
+        return DownloadCandidates.of(CleanroomRemoteVersion.LOADER_LIST_URL,
+                WebURL.parse("https://alist.8mi.tech/d/mirror/HMCL-Metadata/Auto/cleanroom/index.json"));
     }
 
     @Override

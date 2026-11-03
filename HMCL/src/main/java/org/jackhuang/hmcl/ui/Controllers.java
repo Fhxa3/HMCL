@@ -45,7 +45,6 @@ import org.jackhuang.hmcl.ui.instances.GameListPage;
 import org.jackhuang.hmcl.ui.instances.GameInstancePage;
 import org.jackhuang.hmcl.ui.instances.Instances;
 import org.jackhuang.hmcl.upgrade.IntegrityChecker;
-import org.jackhuang.hmcl.upgrade.UpdateChecker;
 import org.jackhuang.hmcl.util.*;
 import org.jackhuang.hmcl.util.function.ExceptionalRunnable;
 import org.jackhuang.hmcl.util.i18n.I18n;
@@ -56,6 +55,7 @@ import org.jackhuang.hmcl.util.platform.OperatingSystem;
 import org.jackhuang.hmcl.util.platform.SystemInfo;
 import org.jetbrains.annotations.NotNullByDefault;
 import org.jetbrains.annotations.Nullable;
+import org.jetbrains.annotations.Unmodifiable;
 
 import java.io.IOException;
 import java.net.URI;
@@ -226,6 +226,15 @@ public final class Controllers {
         return accountListPage;
     }
 
+    /// Creates and attaches the account-list page for a layout pulse unless already cached.
+    @FXThread
+    public static void prepareAccountListPage() {
+        if (accountListPage == null) {
+            LOG.info("Preparing account list page");
+            getDecorator().prewarmPage(getAccountListPage());
+        }
+    }
+
     /// The cached download page.
     private static @Nullable DownloadPage downloadPage;
 
@@ -312,13 +321,6 @@ public final class Controllers {
 
         decorator = new Decorator(getRootPage(), Controllers::configureMainStage);
         Scene mainScene = decorator.attachStage(stage);
-        getRootPage().getMainPage().showUpdateProperty().bind(UpdateChecker.checkingUpdateProperty().not().and(UpdateChecker.outdatedProperty()));
-        getRootPage().getMainPage().showUpdateDialogProperty().bind(
-                decorator.backableProperty().not()
-                        .and(getRootPage().getMainPage().showUpdateProperty())
-                        .and(settings().disableAutoShowUpdateDialogProperty().not())
-        );
-
         if (settings().commonDirectoryTypeProperty().get() == EnumCommonDirectory.CUSTOM &&
                 !FileUtils.canCreateDirectory(settings().getResolvedCommonDirectory())) {
             settings().commonDirectoryTypeProperty().set(EnumCommonDirectory.DEFAULT);
@@ -456,6 +458,36 @@ public final class Controllers {
         }
 
         tryInstallBundledModpack(GameDirectoryManager.getSelectedRepository());
+
+        // Build the main pages right after the window appears so that their first visit does not stall.
+        Platform.runLater(Controllers::prewarmMainPages);
+    }
+
+    /// Prewarms the main navigation pages one after another so that their first visit does not stall.
+    private static void prewarmMainPages() {
+        @Unmodifiable List<Runnable> tasks = List.of(
+                Controllers::prepareGameInstancePage,
+                Controllers::prepareGameListPage,
+                Controllers::prepareDownloadPage,
+                Controllers::prepareSettingsPage,
+                Controllers::prepareAccountListPage
+        );
+        prewarmMainPage(tasks, 0);
+    }
+
+    private static void prewarmMainPage(@Unmodifiable List<Runnable> tasks, int index) {
+        if (index >= tasks.size())
+            return;
+
+        try {
+            tasks.get(index).run();
+        } catch (Throwable e) {
+            LOG.warning("Failed to prewarm main page " + index, e);
+        }
+
+        // The container releases a prewarmed page on the layout pass after the one that attached it.
+        Platform.runLater(() -> Platform.runLater(() -> Platform.runLater(() ->
+                prewarmMainPage(tasks, index + 1))));
     }
 
     /// Installs the package found by [Metadata#findBundledModpackFile()] asynchronously, if present.
