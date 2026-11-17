@@ -31,7 +31,6 @@ import org.jackhuang.hmcl.ui.Controllers;
 import org.jackhuang.hmcl.ui.FXUtils;
 import org.jackhuang.hmcl.ui.WeakListenerHolder;
 import org.jackhuang.hmcl.ui.construct.*;
-import org.jackhuang.hmcl.upgrade.IntegrityChecker;
 import org.jackhuang.hmcl.util.QrCodeUtils;
 import org.jackhuang.hmcl.util.StringUtils;
 
@@ -126,12 +125,6 @@ public class MicrosoftAccountLoginPane extends JFXDialogLayout implements Dialog
 
         StackPane warningPane = new StackPane();
         rootContainer.getChildren().add(warningPane);
-
-        if (!IntegrityChecker.isOfficial()) {
-            var unofficialHintPane = new HintPane(MessageDialogPane.MessageType.WARNING);
-            unofficialHintPane.setSegment(i18n("unofficial.hint"));
-            warningPane.getChildren().setAll(unofficialHintPane);
-        }
 
         if (Accounts.OAUTH_CALLBACK.getClientId().isEmpty()) {
             HintPane snapshotHint = new HintPane(MessageDialogPane.MessageType.ERROR);

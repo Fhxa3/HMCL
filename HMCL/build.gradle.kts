@@ -25,7 +25,9 @@ val isOfficial = JenkinsUtils.IS_ON_CI || GitHubActionUtils.IS_ON_OFFICIAL_REPO
 val versionType = providers.environmentVariable("VERSION_TYPE").getOrElse(if (isOfficial) "nightly" else "unofficial")
 val versionRoot = providers.environmentVariable("VERSION_ROOT").getOrElse(projectConfig.getProperty("versionRoot") ?: "3")
 
-val microsoftAuthId = providers.environmentVariable("MICROSOFT_AUTH_ID").getOrElse("")
+// 回退到官方 HMCL 发行版内置的 Microsoft OAuth 客户端 ID，使自编译版本也能登录微软账户。
+val microsoftAuthId = providers.environmentVariable("MICROSOFT_AUTH_ID")
+        .getOrElse("6a3728d6-27a3-4180-99bb-479895b8f88e")
 val curseForgeApiKey = providers.environmentVariable("CURSEFORGE_API_KEY").getOrElse("")
 
 val launcherExe = providers.environmentVariable("HMCL_LAUNCHER_EXE").getOrElse("")
