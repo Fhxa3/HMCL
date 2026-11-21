@@ -18,6 +18,8 @@ import org.jackhuang.hmcl.ui.animation.TransitionPane;
 import org.jetbrains.annotations.NotNullByDefault;
 import org.jetbrains.annotations.Nullable;
 
+import java.util.ArrayDeque;
+import java.util.Deque;
 import java.util.Objects;
 
 import static org.jackhuang.hmcl.ui.animation.TransitionPane.isCacheAllowed;
@@ -33,6 +35,15 @@ public final class TabController implements PageAware {
 
     /// The mutable tabs in display order.
     private final ObservableList<TabItem<?>> tabs = FXCollections.observableArrayList();
+
+    /// The maximum number of previously selected tabs retained for back navigation.
+    private static final int MAX_HISTORY = 32;
+
+    /// Previously selected tabs, most recently selected last.
+    private final Deque<TabItem<?>> history = new ArrayDeque<>();
+
+    /// Whether a history restoration is in progress, which must not record new history.
+    private boolean restoringHistory;
 
     /// Creates a controller with the supplied tabs and no content destination.
     ///
@@ -125,8 +136,46 @@ public final class TabController implements PageAware {
             }
         }
         selectedTab.set(tab);
+        // Only user-driven selections participate in back history. 
+        if (playAnimation && !restoringHistory && previous != null && previous != tab) {
+            history.addLast(previous);
+            while (history.size() > MAX_HISTORY)
+                history.removeFirst();
+        }
         if (content instanceof PageAware pageAware)
             pageAware.onPageShown();
+    }
+
+    /// Returns whether a previously selected tab can be restored.
+    public boolean canGoBack() {
+        for (TabItem<?> tab : history) {
+            if (tabs.contains(tab))
+                return true;
+        }
+        return false;
+    }
+
+    /// Restores the most recently selected tab without recording a new history entry.
+    public boolean goBack() {
+        @Nullable TabItem<?> current = getSelectedTab();
+        while (!history.isEmpty()) {
+            TabItem<?> previous = history.removeLast();
+            if (!tabs.contains(previous) || previous == current)
+                continue;
+            restoringHistory = true;
+            try {
+                selectTab(previous, false);
+            } finally {
+                restoringHistory = false;
+            }
+            return true;
+        }
+        return false;
+    }
+
+    /// Clears the remembered tab selections.
+    public void clearHistory() {
+        history.clear();
     }
 
     /// Updates selection after list changes, activating a replacement only when selection was removed.

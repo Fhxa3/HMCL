@@ -104,6 +104,7 @@ public class GameInstancePage extends DecoratorAnimatedPage implements Decorator
         tabController.selectTab(gameSettingsTab);
 
         addEventHandler(Navigator.NavigationEvent.NAVIGATED, this::onNavigated);
+        addEventHandler(Navigator.NavigationEvent.EXITED, event -> tabController.clearHistory());
 
         addEventHandler(WorkingDirChangedEvent.EVENT_TYPE, event -> {
             HMCLGameInstance.Optional current = this.instance.get();
@@ -251,6 +252,14 @@ public class GameInstancePage extends DecoratorAnimatedPage implements Decorator
         });
     }
 
+    /// Restores the previously selected tab for mouse-driven back actions.
+    ///
+    /// @return whether a tab was restored
+    @Override
+    public boolean backTab() {
+        return tabController.goBack();
+    }
+
     public void showInstanceSettings() {
         tabController.selectTab(gameSettingsTab, false);
     }
@@ -274,6 +283,9 @@ public class GameInstancePage extends DecoratorAnimatedPage implements Decorator
     private void onNavigated(Navigator.NavigationEvent event) {
         if (this.instance.get() == null)
             throw new IllegalStateException();
+
+        // Entering the page afresh must leave the tabs, not restore a previous visit's tab.
+        tabController.clearHistory();
 
         // If we jumped to game list page and deleted this version
         // and back to this page, we should return to main page.

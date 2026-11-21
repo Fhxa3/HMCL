@@ -375,9 +375,19 @@ public class DownloadPage extends Control implements DecoratorPage {
         /// The dependency represented by this row.
         public final RemoteAddon addon;
 
+        /// The version dialog that displayed this dependency, restored when the dependency page is closed.
+        private final @Nullable AddonVersion sourceDialog;
+
         /// Creates a dependency row that opens the addon's download page.
-        DependencyAddonItem(DownloadListPage page, RemoteAddon addon, HMCLGameInstance.Optional instanceReference) {
+        ///
+        /// @param page              the download list page that owns the new download page
+        /// @param addon             the dependency represented by this row
+        /// @param instanceReference the instance targeted by the download page
+        /// @param sourceDialog      the dialog that opened this row, or null to skip restoration
+        DependencyAddonItem(DownloadListPage page, RemoteAddon addon, HMCLGameInstance.Optional instanceReference,
+                            @Nullable AddonVersion sourceDialog) {
             this.addon = addon;
+            this.sourceDialog = sourceDialog;
 
             container.setPadding(new Insets(10, 24, 10, 24));
             container.getTitleLabel().setMinWidth(0);
@@ -397,7 +407,14 @@ public class DownloadPage extends Control implements DecoratorPage {
             };
             setOnAction((e) -> {
                 fireEvent(new DialogCloseEvent());
-                Controllers.navigate(new DownloadPage(page, addon, instanceReference, callback));
+
+                DownloadPage downloadPage = new DownloadPage(page, addon, instanceReference, callback);
+                if (sourceDialog != null) {
+                    // Restore the version dialog when the user navigates back from the dependency page.
+                    downloadPage.addEventHandler(Navigator.NavigationEvent.EXITED,
+                            event -> Controllers.dialog(sourceDialog));
+                }
+                Controllers.navigate(downloadPage);
             });
             @Nullable AddonProjectInfoRegistry<?> registry = AddonProjectInfoRegistry.getByAddonType(type);
             @Nullable AddonProjectInfo mod = registry != null ? registry.getInfoByCurseForgeId(addon.slug()) : null;
@@ -603,7 +620,8 @@ public class DownloadPage extends Control implements DecoratorPage {
                                     hasBroken.set(true);
                                     return;
                                 }
-                                DependencyAddonItem dependencyAddonItem = new DependencyAddonItem(selfPage.page, dep, selfPage.instanceReference);
+                                DependencyAddonItem dependencyAddonItem = new DependencyAddonItem(
+                                        selfPage.page, dep, selfPage.instanceReference, AddonVersion.this);
                                 var listener = FXUtils.onWeakChangeAndOperate(dependenciesList.widthProperty(), d -> FXUtils.setLimitWidth(dependencyAddonItem, d.doubleValue()));
                                 dependencyAddonItem.getProperties().put("DependencyAddonItem.width", listener);
                                 dependencies.get(dependency.getType()).value().add(dependencyAddonItem);

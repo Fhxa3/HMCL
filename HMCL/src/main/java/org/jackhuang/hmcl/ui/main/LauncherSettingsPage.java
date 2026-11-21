@@ -63,6 +63,8 @@ public class LauncherSettingsPage extends DecoratorAnimatedPage implements Decor
 
         tabController.selectTab(gameTab);
         addEventHandler(Navigator.NavigationEvent.NAVIGATED, event -> gameTab.getNode().loadInstance(HMCLGameInstance.Optional.empty(GameDirectoryManager.getSelectedRepository())));
+        // Leaving the page resets the tab history so that a later visit starts from the default tab.
+        addEventHandler(Navigator.NavigationEvent.EXITED, event -> tabController.clearHistory());
 
         getSidebar()
                 .addNavigationDrawerTab(tabController, gameTab, i18n("settings.type.global.manage"), SVG.STADIA_CONTROLLER, SVG.STADIA_CONTROLLER_FILL)
@@ -79,8 +81,18 @@ public class LauncherSettingsPage extends DecoratorAnimatedPage implements Decor
         setContent(transitionPane);
     }
 
+    /// Restores the previously selected settings tab for mouse-driven back actions.
+    ///
+    /// @return whether a tab was restored
+    @Override
+    public boolean backTab() {
+        return tabController.goBack();
+    }
+
     @Override
     public void onPageShown() {
+        // Entering the page afresh must leave the tabs, not restore a previous visit's tab.
+        tabController.clearHistory();
         tabController.onPageShown();
     }
 

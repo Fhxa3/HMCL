@@ -27,6 +27,7 @@ import org.jackhuang.hmcl.ui.SVG;
 import org.jackhuang.hmcl.ui.WeakListenerHolder;
 import org.jackhuang.hmcl.ui.animation.TransitionPane;
 import org.jackhuang.hmcl.ui.construct.MessageDialogPane;
+import org.jackhuang.hmcl.ui.construct.Navigator;
 import org.jackhuang.hmcl.ui.construct.TabController;
 import org.jackhuang.hmcl.ui.construct.TabItem;
 import org.jackhuang.hmcl.ui.construct.Validator;
@@ -140,6 +141,18 @@ public class DownloadPage extends DecoratorAnimatedPage implements DecoratorPage
                 .addNavigationDrawerTab(tabController, worldTab, i18n("world"), SVG.PUBLIC);
 
         setContent(transitionPane);
+
+        // Entering or leaving the page resets the tab history so that a later visit starts from the default tab.
+        addEventHandler(Navigator.NavigationEvent.NAVIGATED, event -> tabController.clearHistory());
+        addEventHandler(Navigator.NavigationEvent.EXITED, event -> tabController.clearHistory());
+    }
+
+    /// Restores the previously selected download tab for mouse-driven back actions.
+    ///
+    /// @return whether a tab was restored
+    @Override
+    public boolean backTab() {
+        return tabController.goBack();
     }
 
     private static TabItem<DownloadListPage> newDownloadListTab(Supplier<DownloadListPage> pageSupplier) {

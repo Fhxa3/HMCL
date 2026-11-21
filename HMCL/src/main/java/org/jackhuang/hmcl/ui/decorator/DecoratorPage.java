@@ -18,6 +18,11 @@ public interface DecoratorPage extends Refreshable {
         return true;
     }
 
+    /// Restores the previously selected inner tab and keeps this page open.
+    default boolean backTab() {
+        return false;
+    }
+
     @Override
     default void refresh() {
     }

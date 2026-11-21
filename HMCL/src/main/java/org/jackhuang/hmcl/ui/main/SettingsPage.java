@@ -105,6 +105,14 @@ public final class SettingsPage extends ScrollPane {
             }
 
             {
+                LineSwitch secondaryButtonBack = new LineSwitch();
+                secondaryButtonBack.setTitle(i18n("settings.launcher.secondary_button_back"));
+                secondaryButtonBack.setSubtitle(i18n("settings.launcher.secondary_button_back.subtitle"));
+                secondaryButtonBack.selectedProperty().bindBidirectional(settings().secondaryButtonBackProperty());
+                miscPaneList.getContent().add(secondaryButtonBack);
+            }
+
+            {
                 BorderPane debugPane = new BorderPane();
 
                 Label left = new Label(i18n("settings.launcher.debug"));

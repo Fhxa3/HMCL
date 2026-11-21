@@ -115,13 +115,16 @@ public final class WorldManagePage extends DecoratorAnimatedPage implements Deco
     }
 
     private void onNavigated(Navigator.NavigationEvent event) {
-        if (isFirstNavigation)
+        if (isFirstNavigation) {
             isFirstNavigation = false;
-        else
+            tabController.clearHistory();
+        } else {
             refresh();
+        }
     }
 
     public void onExited(Navigator.NavigationEvent event) {
+        tabController.clearHistory();
         try {
             WorldManageUIUtils.closeSessionLockChannel(world, sessionLockChannel);
         } catch (IOException ignored) {
@@ -168,6 +171,14 @@ public final class WorldManagePage extends DecoratorAnimatedPage implements Deco
     }
 
     /// Registers supported world tabs and selects the information tab.
+    /// Restores the previously selected world tab for mouse-driven back actions.
+    ///
+    /// @return whether a tab was restored
+    @Override
+    public boolean backTab() {
+        return tabController.goBack();
+    }
+
     private void initializeSidebar() {
         tabController.getTabs().addAll(worldInfoTab, worldBackupsTab);
         tabController.selectTab(worldInfoTab);

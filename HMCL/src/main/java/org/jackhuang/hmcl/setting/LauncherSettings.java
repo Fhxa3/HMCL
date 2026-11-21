@@ -479,6 +479,15 @@ public final class LauncherSettings extends ObservableSetting implements JsonSch
                 FXUtils.REDUCED_MOTION == Boolean.TRUE || !JavaRuntime.CURRENT_JIT_ENABLED || !FXUtils.GPU_ACCELERATION_ENABLED);
     }
 
+    /// Whether right-clicking is allowed to perform the back navigation.
+    @SerializedName("secondaryButtonBack")
+    private final BooleanProperty secondaryButtonBack = new SimpleBooleanProperty(false);
+
+    /// Returns the secondary-button navigation property.
+    public BooleanProperty secondaryButtonBackProperty() {
+        return secondaryButtonBack;
+    }
+
     // Networks
 
     /// Whether HMCL automatically selects the number of download threads.

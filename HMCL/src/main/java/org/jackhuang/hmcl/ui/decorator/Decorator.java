@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later WITH AdditionRef-HMCL
 package org.jackhuang.hmcl.ui.decorator;
 
+import com.jfoenix.controls.JFXPopup;
 import com.jfoenix.controls.JFXSnackbar;
 import com.jfoenix.controls.JFXSnackbarLayout;
 import com.jfoenix.skins.JFXDatePickerContent;
@@ -28,6 +29,8 @@ import javafx.scene.Cursor;
 import javafx.scene.Node;
 import javafx.scene.Parent;
 import javafx.scene.Scene;
+import javafx.scene.control.ButtonBase;
+import javafx.scene.control.ContextMenu;
 import javafx.scene.effect.BlurType;
 import javafx.scene.effect.DropShadow;
 import javafx.scene.input.DragEvent;
@@ -59,7 +62,9 @@ import org.jackhuang.hmcl.ui.animation.ContainerAnimations;
 import org.jackhuang.hmcl.ui.animation.Motion;
 import org.jackhuang.hmcl.ui.animation.TransitionPane;
 import org.jackhuang.hmcl.ui.construct.JFXDialogPane;
+import org.jackhuang.hmcl.ui.construct.MessageDialogPane;
 import org.jackhuang.hmcl.ui.construct.Navigator;
+import org.jackhuang.hmcl.ui.construct.TaskExecutorDialogPane;
 import org.jackhuang.hmcl.ui.wizard.Navigation;
 import org.jackhuang.hmcl.ui.wizard.Refreshable;
 import org.jackhuang.hmcl.ui.wizard.WizardProvider;
@@ -67,8 +72,11 @@ import org.jackhuang.hmcl.util.platform.OperatingSystem;
 import org.jackhuang.hmcl.util.platform.SystemInfo;
 import org.jetbrains.annotations.NotNullByDefault;
 import org.jetbrains.annotations.Nullable;
+import org.jetbrains.annotations.Unmodifiable;
 
+import java.util.HashSet;
 import java.util.Objects;
+import java.util.Set;
 import java.util.Stack;
 import java.util.function.Consumer;
 
@@ -230,6 +238,12 @@ public final class Decorator {
 
     /// The direction used by the next title-bar transition.
     private Navigation.NavigationDirection navigationDirection = Navigation.NavigationDirection.START;
+
+    /// The top dialog content observed when the current secondary-button press started, or `null` if none was open.
+    private @Nullable Node secondaryPressedDialogContent;
+
+    /// The menu popups that were already showing when the current secondary-button press started.
+    private @Unmodifiable Set<Window> secondaryPressedPopupWindows = Set.of();
 
     /// Creates a detached decorator and initializes its navigation stack.
     ///
@@ -1062,6 +1076,8 @@ public final class Decorator {
     }
 
     /// Navigates back if the current page permits the operation.
+    ///
+    /// This is the keyboard and title-bar path: it leaves the current page directly.
     void back() {
         if (navigator.getCurrentPage() instanceof DecoratorPage page) {
             if (page.back() && navigator.canGoBack()) {
@@ -1070,6 +1086,16 @@ public final class Decorator {
         } else if (navigator.canGoBack()) {
             navigator.close();
         }
+    }
+
+    /// Navigates back from a mouse-driven action, restoring an inner tab before leaving the page.
+    ///
+    /// The back side button and the secondary button use this path, so they first step back through
+    /// the page's inner tabs. Escape and the title-bar back button keep calling [#back()].
+    void backWithTabs() {
+        if (navigator.getCurrentPage() instanceof DecoratorPage page && page.backTab())
+            return;
+        back();
     }
 
     /// Refreshes the current page when it currently permits refresh.
@@ -1164,10 +1190,146 @@ public final class Decorator {
 
         navigator.addEventFilter(MouseEvent.MOUSE_CLICKED, event -> {
             if (event.getButton() == MouseButton.BACK) {
-                back();
+                backWithTabs();
                 event.consume();
             }
         });
+
+        root.addEventFilter(MouseEvent.MOUSE_PRESSED, event -> {
+            if (event.getButton() != MouseButton.SECONDARY)
+                return;
+            @Nullable JFXDialogPane dialogPane = getCurrentDialogPane();
+            secondaryPressedDialogContent = dialogPane != null ? dialogPane.peek().orElse(null) : null;
+            secondaryPressedPopupWindows = visibleMenuPopups();
+        });
+
+        // Use a filter so that a right click is observed even when a page control consumes the bubbling event.
+        root.addEventFilter(MouseEvent.MOUSE_CLICKED, this::onSecondaryClick);
+    }
+
+    /// Handles a secondary-button click on the page content or on the dimmed dialog overlay.
+    private void onSecondaryClick(MouseEvent event) {
+        if (event.getButton() != MouseButton.SECONDARY)
+            return;
+
+        @Nullable Node target = event.getTarget() instanceof Node node ? node : null;
+        @Nullable Node pressedDialog = secondaryPressedDialogContent;
+        @Unmodifiable Set<Window> pressedPopups = secondaryPressedPopupWindows;
+        secondaryPressedDialogContent = null;
+        secondaryPressedPopupWindows = Set.of();
+
+        if (!SettingsManager.settings().secondaryButtonBackProperty().get())
+            return;
+
+        Platform.runLater(() -> {
+            // Only a menu opened by this very click suppresses navigation. Controls that merely consume the
+            // click, such as hover feedback layers, must not prevent a right click from navigating back.
+            if (hasNewMenuPopup(pressedPopups))
+                return;
+
+            @Nullable JFXDialogPane dialogPane = getCurrentDialogPane();
+            @Nullable Node currentDialog = dialogPane != null ? dialogPane.peek().orElse(null) : null;
+
+            if (currentDialog != null) {
+                // A dialog opened by this very click is not the overlay that was clicked.
+                if (currentDialog != pressedDialog || isAncestor(dialogPane, target))
+                    return;
+                dismissTopDialog(currentDialog);
+                return;
+            }
+
+            if (pressedDialog != null || !isAncestor(navigator, target))
+                return;
+
+            backWithTabs();
+        });
+    }
+
+    /// Cancels the given dialog, or sends an active task dialog to the task list.
+    private void dismissTopDialog(Node content) {
+        if (content instanceof TaskExecutorDialogPane taskDialog) {
+            taskDialog.runInBackground();
+            return;
+        }
+
+        if (content instanceof MessageDialogPane messageDialog) {
+            @Nullable ButtonBase messageCancelButton = messageDialog.getCancelButton();
+            if (messageCancelButton != null) {
+                if (!messageCancelButton.isDisabled())
+                    messageCancelButton.fire();
+                return;
+            }
+        }
+
+        @Nullable ButtonBase cancelButton = findCancelButton(content);
+        if (cancelButton != null) {
+            if (!cancelButton.isDisabled())
+                cancelButton.fire();
+            return;
+        }
+
+        DialogUtils.close(content);
+    }
+
+    /// Returns the first cancel-styled button inside a subtree, or null when there is none.
+    private static @Nullable ButtonBase findCancelButton(Node root) {
+        if (root instanceof ButtonBase button && button.getStyleClass().contains("dialog-cancel"))
+            return button;
+
+        if (root instanceof Parent parent) {
+            for (Node child : parent.getChildrenUnmodifiable()) {
+                @Nullable ButtonBase button = findCancelButton(child);
+                if (button != null)
+                    return button;
+            }
+        }
+
+        return null;
+    }
+
+    /// Returns whether a menu popup appeared after the given snapshot was taken.
+    ///
+    /// Only context menus and add-on popup menus suppress navigation, so tooltips and menus that are still
+    /// fading out cannot block a right click.
+    private static boolean hasNewMenuPopup(@Unmodifiable Set<Window> before) {
+        for (Window window : Window.getWindows()) {
+            if (window.isShowing() && isMenuPopup(window) && !before.contains(window))
+                return true;
+        }
+        return false;
+    }
+
+    /// Returns the menu popups that are currently showing.
+    private static @Unmodifiable Set<Window> visibleMenuPopups() {
+        Set<Window> popups = new HashSet<>();
+        for (Window window : Window.getWindows()) {
+            if (window.isShowing() && isMenuPopup(window))
+                popups.add(window);
+        }
+        return Set.copyOf(popups);
+    }
+
+    /// Returns whether a window is a context menu or an add-on popup menu.
+    private static boolean isMenuPopup(Window window) {
+        return window instanceof JFXPopup || window instanceof ContextMenu;
+    }
+
+    /// Returns the main-window dialog stack, or null before any dialog has been shown.
+    private @Nullable JFXDialogPane getCurrentDialogPane() {
+        return (JFXDialogPane) getDialogContainer().getProperties()
+                .get(DialogUtils.PROPERTY_DIALOG_PANE_INSTANCE);
+    }
+
+    /// Returns whether a node is the ancestor itself or one of its descendants.
+    private static boolean isAncestor(@Nullable Node ancestor, @Nullable Node node) {
+        if (ancestor == null)
+            return false;
+
+        for (Node current = node; current != null; current = current.getParent()) {
+            if (current == ancestor)
+                return true;
+        }
+        return false;
     }
 
     /// Restores the root node's transform after an animated minimization.
